@@ -1,0 +1,6 @@
+confluent-kafka[avro,schemaregistry]==2.13.2
+httpx==0.28.1
+python-dotenv==1.2.2
+rich==14.3.3
+pytest==9.0.2
+ruff==0.15.6

@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orderflow | Kafka Operations</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script defer src="/lucide.js"></script>
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <aside class="rail">
+      <a class="brand" href="/" aria-label="Orderflow home"
+        ><span class="brand-symbol"><i data-lucide="workflow"></i></span
+        ><span>orderflow<span class="brand-period">.</span></span></a
+      >
+      <div class="rail-label">WORKSPACE</div>
+      <nav aria-label="Main navigation">
+        <button class="nav-item active" data-view="overview">
+          <i data-lucide="layout-dashboard"></i> Overview
+        </button>
+        <button class="nav-item" data-view="records">
+          <i data-lucide="list-tree"></i> Record explorer
+        </button>
+        <button class="nav-item" data-view="schema">
+          <i data-lucide="braces"></i> Schema registry
+        </button>
+        <button class="nav-item" data-view="events">
+          <i data-lucide="terminal"></i> Event log
+          <span id="error-count" class="nav-count" hidden></span>
+        </button>
+      </nav>
+      <div class="rail-bottom">
+        <div class="environment">
+          <span class="status-dot"></span> LOCAL ENVIRONMENT
+        </div>
+        <div class="rail-meta">Apache Kafka <span>KRaft</span></div>
+        <div class="rail-meta">Serialization <span>Avro</span></div>
+        <a
+          href="http://localhost:8080"
+          target="_blank"
+          rel="noopener"
+          class="external-link"
+          >Kafka UI <i data-lucide="arrow-up-right"></i
+        ></a>
+        <div class="version">ORDER PROCESSING / V1.0</div>
+      </div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <div class="breadcrumb">
+          Workspace <span>/</span> <strong id="breadcrumb">Overview</strong>
+        </div>
+        <div class="connection">
+          <span id="connection-dot" class="status-dot pending"></span
+          ><span id="connection-label">Connecting</span><time id="clock"></time>
+        </div>
+      </header>
+      <div class="page">
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">ORDER OPERATIONS</div>
+            <h1 id="page-title">Pipeline overview</h1>
+          </div>
+          <div class="heading-actions">
+            <span class="session-tag">LIVE SESSION</span
+            ><button id="start-workers" class="button primary">
+              <i data-lucide="play"></i> Start workers
+            </button>
+          </div>
+        </div>
+        <div id="error-banner" class="error-banner" role="alert" hidden></div>
+
+        <section id="overview-view" class="view">
+          <div class="pipeline section-band">
+            <div class="pipeline-node">
+              <div class="node-top">
+                <span class="node-icon"><i data-lucide="send"></i></span
+                ><span class="node-status" id="producer-status">Stopped</span>
+              </div>
+              <h3>Producer</h3>
+              <div class="node-bottom">
+                <span id="producer-count">0 sent</span
+                ><button
+                  class="icon-button"
+                  id="stop-producer"
+                  title="Stop producer"
+                  aria-label="Stop producer"
+                  disabled
+                >
+                  <i data-lucide="square"></i>
+                </button>
+              </div>
+            </div>
+            <div class="flow-arrow">
+              <i data-lucide="arrow-right"></i><span>AVRO</span>
+            </div>
+            <div class="pipeline-node">
+              <div class="node-top">
+                <span class="node-icon kafka"
+                  ><i data-lucide="database"></i></span
+                ><span class="node-status" id="broker-status">Connecting</span>
+              </div>
+              <h3>Kafka broker</h3>
+              <div class="node-bottom">
+                <span id="orders-topic">demo.orders</span
+                ><span class="tiny-label">KRAFT</span>
+              </div>
+            </div>
+            <div class="flow-arrow">
+              <i data-lucide="arrow-right"></i><span>CONSUME</span>
+            </div>
+            <div class="pipeline-node">
+              <div class="node-top">
+                <span class="node-icon"><i data-lucide="cpu"></i></span
+                ><span class="node-status" id="consumer-status">Stopped</span>
+              </div>
+              <h3>Order consumer</h3>
+              <div class="node-bottom">
+                <span>Manual commits</span
+                ><button
+                  class="icon-button worker-toggle"
+                  data-worker="consumer"
+                  title="Start consumer"
+                  aria-label="Start consumer"
+                >
+                  <i data-lucide="play"></i>
+                </button>
+              </div>
+            </div>
+            <div class="flow-arrow">
+              <i data-lucide="arrow-right"></i><span>RECOVER</span>
+            </div>
+            <div class="pipeline-node">
+              <div class="node-top">
+                <span class="node-icon retry"
+                  ><i data-lucide="rotate-cw"></i></span
+                ><span class="node-status" id="retry-status">Stopped</span>
+              </div>
+              <h3>Retry worker</h3>
+              <div class="node-bottom">
+                <span id="retry-policy">3 retries / jitter</span
+                ><button
+                  class="icon-button worker-toggle"
+                  data-worker="retry"
+                  title="Start retry worker"
+                  aria-label="Start retry worker"
+                >
+                  <i data-lucide="play"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <section class="metrics" aria-label="Session metrics">
+            <div class="metric">
+              <span class="metric-label"
+                >Orders produced <i data-lucide="send"></i></span
+              ><strong id="metric-produced">0</strong
+              ><span class="metric-note">Acknowledged by Kafka</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label"
+                >Successfully processed <i data-lucide="check-check"></i></span
+              ><strong id="metric-processed">0</strong
+              ><span class="metric-note">Current consumer run</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label"
+                >Retries scheduled <i data-lucide="rotate-cw"></i></span
+              ><strong id="metric-retries" class="amber">0</strong
+              ><span class="metric-note" id="retry-note">0 released</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label"
+                >Dead-lettered <i data-lucide="inbox"></i></span
+              ><strong id="metric-dlq" class="rose">0</strong
+              ><span class="metric-note">Failed processing attempts</span>
+            </div>
+          </section>
+
+          <div class="workbench">
+            <section class="generator">
+              <div class="section-heading">
+                <h2>Generate orders</h2>
+                <span class="tiny-label">PRODUCER</span>
+              </div>
+              <form id="produce-form">
+                <label for="mode">Scenario</label
+                ><select id="mode">
+                  <option value="normal">Normal orders</option>
+                  <option value="transient">Transient failure / recover</option>
+                  <option value="exhausted">Exhaust all retries</option>
+                  <option value="negative">
+                    Invalid data / negative price
+                  </option>
+                  <option value="missing-product">
+                    Missing required product
+                  </option>
+                  <option value="malformed">Malformed payload</option>
+                  <option value="mixed">Mixed scenarios</option>
+                </select>
+                <div class="form-row">
+                  <div>
+                    <label for="count">Batch size</label
+                    ><input
+                      id="count"
+                      type="number"
+                      min="1"
+                      max="1000"
+                      value="5"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label for="rate">Orders / second</label
+                    ><input
+                      id="rate"
+                      type="number"
+                      min="0.1"
+                      max="20"
+                      step="0.1"
+                      value="1"
+                      required
+                    />
+                  </div>
+                </div>
+                <div id="failures-field" hidden>
+                  <label for="failures">Failures before recovery</label
+                  ><input
+                    id="failures"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value="2"
+                  />
+                </div>
+                <div class="generator-footer">
+                  <label class="switch-label"
+                    ><input
+                      id="continuous"
+                      type="checkbox"
+                      role="switch"
+                    /><span>Continuous</span></label
+                  ><button
+                    id="produce-button"
+                    class="button dark"
+                    type="submit"
+                  >
+                    <i data-lucide="send"></i> Produce orders
+                  </button>
+                </div>
+              </form>
+            </section>
+            <section class="aggregation">
+              <div class="section-heading">
+                <h2>Running averages</h2>
+                <span class="tiny-label">COUNT + SUM</span>
+              </div>
+              <div class="average-head">
+                <div>
+                  <span class="metric-label">Global price average</span>
+                  <div class="average-number">
+                    <span>$</span><strong id="global-average">0.00</strong>
+                  </div>
+                </div>
+                <span id="sample-count" class="sample-count"
+                  >0 valid orders</span
+                >
+              </div>
+              <div class="chart-wrap">
+                <svg
+                  id="average-chart"
+                  viewBox="0 0 600 100"
+                  preserveAspectRatio="none"
+                  role="img"
+                  aria-label="Running global average over the last 60 successful orders"
+                >
+                  <path class="grid-line" d="M0 20H600 M0 50H600 M0 80H600" />
+                  <path id="chart-area" d="" />
+                  <path id="chart-line" d="" /></svg
+                ><span id="chart-empty">Awaiting processed orders</span>
+              </div>
+              <div id="product-averages" class="product-averages">
+                <div class="empty-products">No product aggregates yet</div>
+              </div>
+              <div class="aggregation-foot">
+                <span>Consumer-local state</span
+                ><span>At-least-once delivery</span>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="records-section" class="records-section">
+          <div class="section-heading record-heading">
+            <div>
+              <h2>
+                Record stream <span id="record-total" class="count-tag">0</span>
+              </h2>
+              <span class="section-subtitle"
+                >Retained Kafka records / latest 300</span
+              >
+            </div>
+            <div class="record-actions">
+              <label class="search"
+                ><i data-lucide="search"></i
+                ><input
+                  id="search"
+                  placeholder="Search ID, product, reason..."
+                  aria-label="Search records" /></label
+              ><button
+                id="pause-feed"
+                class="icon-button"
+                title="Pause record display"
+                aria-label="Pause record display"
+              >
+                <i data-lucide="pause"></i></button
+              ><button
+                id="export-records"
+                class="icon-button"
+                title="Download filtered records as JSON"
+                aria-label="Download records"
+              >
+                <i data-lucide="download"></i>
+              </button>
+            </div>
+          </div>
+          <div class="record-tabs" role="tablist" aria-label="Topic filter">
+            <button
+              class="tab active"
+              data-topic="all"
+              role="tab"
+              aria-selected="true"
+            >
+              All records <span id="tab-all">0</span></button
+            ><button
+              class="tab"
+              data-topic="orders"
+              role="tab"
+              aria-selected="false"
+            >
+              Orders <span id="tab-orders">0</span></button
+            ><button
+              class="tab"
+              data-topic="retry"
+              role="tab"
+              aria-selected="false"
+            >
+              Retries <span id="tab-retry">0</span></button
+            ><button
+              class="tab"
+              data-topic="dlq"
+              role="tab"
+              aria-selected="false"
+            >
+              Dead letters <span id="tab-dlq">0</span>
+            </button>
+          </div>
+          <div class="table-scroll">
+            <table class="records-table">
+              <thead>
+                <tr>
+                  <th>ORDER ID</th>
+                  <th>TOPIC</th>
+                  <th>PRODUCT / PAYLOAD</th>
+                  <th>PRICE</th>
+                  <th>ATTEMPT</th>
+                  <th>PARTITION : OFFSET</th>
+                  <th>STATE</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="record-rows"></tbody>
+            </table>
+          </div>
+          <div id="records-empty" class="empty-state">
+            <i data-lucide="radio"></i>
+            <h3>Waiting for orders</h3>
+            <span id="empty-message">No records in this workspace</span>
+          </div>
+          <div class="table-footer">
+            <span id="records-caption">0 records</span
+            ><span class="live-caption"
+              ><span class="status-dot"></span
+              ><span id="feed-label">Live feed</span></span
+            >
+          </div>
+          <div class="offset-heading section-heading">
+            <h2>Consumer offsets</h2>
+            <span id="offset-group" class="tiny-label"
+              >demo.orders.processors</span
+            >
+          </div>
+          <div class="table-scroll">
+            <table class="offset-table">
+              <thead>
+                <tr>
+                  <th>PARTITION</th>
+                  <th>COMMITTED OFFSET</th>
+                  <th>LOG END OFFSET</th>
+                  <th>LAG</th>
+                </tr>
+              </thead>
+              <tbody id="offset-rows"></tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <span>Manual commits / at-least-once</span
+            ><span id="offset-updated">Awaiting broker offsets</span>
+          </div>
+        </section>
+
+        <section id="schema-view" class="view" hidden>
+          <div class="section-heading">
+            <h2>Order schema</h2>
+            <span id="schema-badge" class="badge">Awaiting registry</span>
+          </div>
+          <div class="schema-details">
+            <div>
+              <label>SUBJECT</label
+              ><strong id="schema-subject">demo.orders-value</strong>
+            </div>
+            <div>
+              <label>NAMESPACE</label><strong>com.assignment.orders</strong>
+            </div>
+            <div><label>RECORD</label><strong>Order</strong></div>
+            <div>
+              <label>COMPATIBILITY</label><strong>Registry default</strong>
+            </div>
+          </div>
+          <table class="schema-table">
+            <thead>
+              <tr>
+                <th>FIELD</th>
+                <th>AVRO TYPE</th>
+                <th>REQUIRED</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>orderId</td>
+                <td><code>string</code></td>
+                <td>Yes</td>
+              </tr>
+              <tr>
+                <td>product</td>
+                <td><code>string</code></td>
+                <td>Yes</td>
+              </tr>
+              <tr>
+                <td>price</td>
+                <td><code>float</code></td>
+                <td>Yes</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="section-heading schema-heading">
+            <h2>Wire format</h2>
+            <span class="tiny-label">CONFLUENT AVRO</span>
+          </div>
+          <div class="wire-format">
+            <div><strong>0x00</strong><span>Magic byte / 1 byte</span></div>
+            <div>
+              <strong id="wire-schema-id">Schema ID</strong
+              ><span>Registry ID / 4 bytes</span>
+            </div>
+            <div>
+              <strong>Order</strong><span>Avro-encoded value / variable</span>
+            </div>
+          </div>
+          <pre id="schema-json" class="code-block"></pre>
+        </section>
+
+        <section id="events-view" class="view" hidden>
+          <div class="section-heading">
+            <h2>Application events</h2>
+            <label class="switch-label"
+              ><input type="checkbox" id="errors-only" /><span
+                >Errors only</span
+              ></label
+            >
+          </div>
+          <div id="event-list" class="event-list"></div>
+        </section>
+        <footer class="page-footer">
+          <span
+            ><i data-lucide="git-branch"></i>
+            <span id="namespace-label">demo.orders</span></span
+          ><span id="footer-policy"
+            >3 retries max <b>·</b> Exponential backoff <b>·</b> Avro</span
+          >
+        </footer>
+      </div>
+    </main>
+    <dialog id="record-dialog">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">RECORD INSPECTOR</span>
+          <h2 id="detail-title">Order</h2>
+        </div>
+        <button
+          id="close-dialog"
+          class="icon-button"
+          aria-label="Close inspector"
+          title="Close inspector"
+        >
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div id="detail-location" class="detail-location"></div>
+        <h3>Payload</h3>
+        <pre id="detail-payload" class="code-block"></pre>
+        <h3>Headers &amp; provenance</h3>
+        <dl id="detail-headers"></dl>
+        <details>
+          <summary>Original bytes / base64</summary>
+          <pre id="detail-base64" class="code-block"></pre>
+        </details>
+      </div>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>
