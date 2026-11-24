@@ -56,6 +56,7 @@ Thumbs.db
 
 # Demo recordings and temporary artifacts
 demo_output/
+run_demo_recording.py
 *.webm
 *.mp4
 
